@@ -84,6 +84,40 @@ npm run smoke
 }
 ```
 
+## Slack agent (Viktor-style)
+
+This repo also ships a **Slack Bolt** assistant that mirrors an MCP-style tool surface: Housecall Pro reads/writes (when credentials are present), the in-repo **estimator** (`run_estimator`), and **PDF** generators for estimate summaries, inspection reports, and duct cleaning reports.
+
+### Configure Slack
+
+1. Create a Slack app with **Socket Mode** enabled and subscribe to bot events: `app_mention`, `message.im`.
+2. Add OAuth scopes your workflows need (for mentions and DMs: `app_mentions:read`, `chat:write`, `im:history`, `files:write`).
+3. Install the app to your workspace and copy **Bot User OAuth Token** (`SLACK_BOT_TOKEN`) and **App-Level Token** with `connections:write` (`SLACK_APP_TOKEN`).
+
+### Run
+
+```bash
+npm install
+npm run build
+npm run start:slack
+```
+
+For development:
+
+```bash
+npm run dev:slack
+```
+
+Environment variables are listed in `.env.example`. Set `OPENAI_API_KEY` for the tool-calling loop. Housecall Pro keys are optional: without them, estimator + PDF tools still work; the model will tell the user HCP is unavailable.
+
+### Estimator rules
+
+Default line items and bundles live in `src/estimator/defaultRulesData.ts`. Point `ESTIMATOR_RULES_PATH` at a JSON file with the same shape (see `src/estimator/schema.ts`) to override without code changes.
+
+### PDF templates
+
+`src/pdf/pdfGenerator.ts` builds customer-facing PDFs with **pdfkit**. Replace or extend that module to match your branded templates (logos, colors, legal copy). The Slack agent uploads generated PDFs to the thread via `files.uploadV2`.
+
 ## Notes
 
 - Housecall Pro's help center says API access and webhooks are available for MAX customers.
