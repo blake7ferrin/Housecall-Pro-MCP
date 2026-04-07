@@ -114,6 +114,16 @@ Environment variables are listed in `.env.example`. Set `OPENAI_API_KEY` for the
 
 Default line items and bundles live in `src/estimator/defaultRulesData.ts`. Point `ESTIMATOR_RULES_PATH` at a JSON file with the same shape (see `src/estimator/schema.ts`) to override without code changes.
 
+### Viktor-style replacement estimator
+
+`run_viktor_estimate` (Slack/OpenAI tool) implements the logic from the Viktor screenshots:
+
+- **Sell from cost** with gross margin: `price = unitCost / (1 - margin)`.
+- **Labor & adders** default to **40%** margin; **equipment** uses **40%** in full-replacement (`bundle`) mode or **23%** in `standalone` mode.
+- **Good / Better / Best** for **3T split heat pump** uses Y / M / X tier costs calibrated to match the sample totals (~$7,492 / $8,031 / $8,938 with tight attic).
+- **Adders** stack from `customerNotes` keywords (e.g. “tight attic”) or explicit `adderIds`; see `src/estimator/viktorCatalogEngine.ts`.
+- **Service & repair** catalog items are **not** duplicated here — the agent should call **`housecall_list_price_book_services`** per your HCP workflow.
+
 ### PDF templates
 
 `src/pdf/pdfGenerator.ts` builds customer-facing PDFs with **pdfkit**. Replace or extend that module to match your branded templates (logos, colors, legal copy). The Slack agent uploads generated PDFs to the thread via `files.uploadV2`.

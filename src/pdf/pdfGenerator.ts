@@ -1,6 +1,6 @@
 import PDFDocument from "pdfkit";
 
-import type { EstimateResult } from "../estimator/index.js";
+import type { EstimateResult, ViktorCatalogEstimateResult } from "../estimator/index.js";
 
 type PdfDoc = InstanceType<typeof PDFDocument>;
 
@@ -77,6 +77,71 @@ export function buildInspectionReportPdf(input: InspectionReportInput): Promise<
     doc.moveDown();
     doc.fontSize(9).fillColor("#666666").text(
       "This document was generated from the in-repo template. Replace with your branded PDF layout by setting PDF_TEMPLATE_DIR.",
+      { align: "center" },
+    );
+    doc.end();
+  });
+}
+
+export function buildViktorTieredEstimatePdf(
+  v: ViktorCatalogEstimateResult,
+  meta?: { customerName?: string; address?: string; jobOrEstimateId?: string },
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const doc = new PDFDocument({ margin: 50 });
+    doc.on("data", (c) => chunks.push(c as Buffer));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    renderHeader(doc, "Catalog-wired estimate (Good / Better / Best)", {
+      customerName: meta?.customerName,
+      address: meta?.address,
+      jobOrEstimateId: meta?.jobOrEstimateId,
+      dateIso: new Date().toISOString().slice(0, 10),
+    });
+
+    doc.fontSize(9).fillColor("#333333");
+    const equipActive =
+      v.equipmentMarginMode === "bundle" ? v.marginsUsed.equipmentBundle : v.marginsUsed.equipmentStandalone;
+    doc.text(
+      `Active equipment margin (${v.equipmentMarginMode}): ${(equipActive * 100).toFixed(0)}%. Also: bundle ${(v.marginsUsed.equipmentBundle * 100).toFixed(0)}% / standalone ${(v.marginsUsed.equipmentStandalone * 100).toFixed(0)}%; labor ${(v.marginsUsed.labor * 100).toFixed(0)}%; adders ${(v.marginsUsed.adder * 100).toFixed(0)}%.`,
+    );
+    doc.fillColor("#000000");
+    doc.moveDown();
+
+    for (const tier of v.tiers) {
+      const rec = tier.recommended ? "  ← Recommended" : "";
+      doc.fontSize(13).text(`${tier.tierLabel} — ${tier.series}: $${tier.subtotal.toLocaleString("en-US")}${rec}`);
+      doc.fontSize(9).text(`Blended gross margin on tier: ~${tier.grossMarginPercent.toFixed(1)}%`);
+      doc.moveDown(0.25);
+      doc.fontSize(10);
+      for (const line of tier.lines) {
+        doc.text(
+          `  ${line.description}: sell $${line.lineTotal.toFixed(2)} (cost $${(line.unitCost * line.quantity).toFixed(2)}, margin ${(line.margin * 100).toFixed(0)}%)`,
+        );
+      }
+      doc.moveDown();
+    }
+
+    if (v.discountFraction && v.subtotalAfterDiscount !== undefined) {
+      doc.fontSize(10).text(
+        `After ${(v.discountFraction * 100).toFixed(0)}% discount on primary tier: $${v.subtotalAfterDiscount.toFixed(2)} (gross ≈ ${v.grossMarginAfterDiscount?.toFixed(1)}%)`,
+      );
+      doc.moveDown();
+    }
+
+    doc.text(`Tax (${(v.taxRate * 100).toFixed(2)}%): ${v.currency} ${v.taxAmount.toFixed(2)}`);
+    doc.fontSize(12).text(`Total (primary tier + tax): ${v.currency} ${v.total.toFixed(2)}`);
+
+    if (v.notes.length > 0) {
+      doc.moveDown();
+      section(doc, "Notes", v.notes);
+    }
+
+    doc.moveDown();
+    doc.fontSize(9).fillColor("#666666").text(
+      "Equipment costs are in-repo placeholders calibrated to Viktor-style totals; align with Housecall Pro before sending.",
       { align: "center" },
     );
     doc.end();

@@ -1,7 +1,14 @@
 import type OpenAI from "openai";
 
 import type { EstimateResult } from "../estimator/index.js";
-import { loadEstimatorRules, runEstimator, type RunEstimatorInput } from "../estimator/index.js";
+import {
+  loadEstimatorRules,
+  runEstimator,
+  runViktorCatalogEstimate,
+  type RunEstimatorInput,
+  type SystemKind,
+  type ViktorCatalogEstimateResult,
+} from "../estimator/index.js";
 import {
   HousecallProApiError,
   HousecallProClient,
@@ -11,6 +18,7 @@ import {
   buildDuctCleaningPdf,
   buildEstimateSummaryPdf,
   buildInspectionReportPdf,
+  buildViktorTieredEstimatePdf,
 } from "../pdf/pdfGenerator.js";
 
 export type ToolExecutorContext = {
@@ -25,6 +33,12 @@ export type ToolExecutorResult = {
 
 function jsonSafe(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+function optionalMargin(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function formatHcpError(error: unknown): string {
@@ -140,19 +154,62 @@ export async function executeToolCall(
         const result = runEstimator(rules, input);
         return { text: jsonSafe(result) };
       }
-      case "build_estimate_pdf": {
-        const estimate = args.estimate as EstimateResult;
-        if (!estimate || typeof estimate !== "object") {
-          return { text: "Invalid estimate payload. Call run_estimator first or pass a full estimate object." };
+      case "run_viktor_estimate": {
+        const systemKind = String(args.systemKind ?? "split_heat_pump") as SystemKind;
+        const validKinds: SystemKind[] = ["split_heat_pump", "split_ac", "package_heat_pump", "package_ac"];
+        if (!validKinds.includes(systemKind)) {
+          return { text: `Invalid systemKind. Use one of: ${validKinds.join(", ")}` };
         }
-        const buffer = await buildEstimateSummaryPdf(estimate, {
+        const rawMargins = args.margins && typeof args.margins === "object"
+          ? (args.margins as Record<string, unknown>)
+          : undefined;
+        const marginsPartial = rawMargins
+          ? {
+              ...(optionalMargin(rawMargins.equipmentBundle) !== undefined
+                ? { equipmentBundle: optionalMargin(rawMargins.equipmentBundle)! }
+                : {}),
+              ...(optionalMargin(rawMargins.equipmentStandalone) !== undefined
+                ? { equipmentStandalone: optionalMargin(rawMargins.equipmentStandalone)! }
+                : {}),
+              ...(optionalMargin(rawMargins.labor) !== undefined
+                ? { labor: optionalMargin(rawMargins.labor)! }
+                : {}),
+              ...(optionalMargin(rawMargins.adder) !== undefined
+                ? { adder: optionalMargin(rawMargins.adder)! }
+                : {}),
+            }
+          : undefined;
+
+        const result = runViktorCatalogEstimate({
+          tonnage: Number(args.tonnage) || 3,
+          systemKind,
+          customerNotes: args.customerNotes as string | undefined,
+          adderIds: args.adderIds as string[] | undefined,
+          equipmentMarginMode: args.equipmentMarginMode === "standalone" ? "standalone" : "bundle",
+          discountFraction:
+            args.discountFraction === undefined ? undefined : Number(args.discountFraction),
+          taxRate: args.taxRate === undefined ? undefined : Number(args.taxRate),
+          margins: marginsPartial && Object.keys(marginsPartial).length > 0 ? marginsPartial : undefined,
+        });
+        return { text: jsonSafe(result) };
+      }
+      case "build_estimate_pdf": {
+        const estimate = args.estimate as EstimateResult | ViktorCatalogEstimateResult;
+        if (!estimate || typeof estimate !== "object") {
+          return { text: "Invalid estimate payload. Call run_estimator or run_viktor_estimate first." };
+        }
+        const meta = {
           customerName: args.customerName as string | undefined,
           address: args.address as string | undefined,
           jobOrEstimateId: args.jobOrEstimateId as string | undefined,
-        });
+        };
+        const isViktor = (estimate as ViktorCatalogEstimateResult).pricingMethod === "viktor_catalog";
+        const buffer = isViktor
+          ? await buildViktorTieredEstimatePdf(estimate as ViktorCatalogEstimateResult, meta)
+          : await buildEstimateSummaryPdf(estimate as EstimateResult, meta);
         return {
           text: "PDF generated successfully. It will be attached to the Slack thread.",
-          pdf: { filename: "estimate-summary.pdf", buffer },
+          pdf: { filename: isViktor ? "catalog-wired-estimate.pdf" : "estimate-summary.pdf", buffer },
         };
       }
       case "build_inspection_pdf": {
@@ -330,7 +387,7 @@ export const openAiTools: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "run_estimator",
       description:
-        "Run in-repo estimator rules to produce line items and totals (inspection, duct cleaning, tune-up). Align results with HCP price book before creating estimates.",
+        "Simple rule-based estimator (inspection, duct cleaning, tune-up). For replacement Good/Better/Best with margin math, use run_viktor_estimate.",
       parameters: {
         type: "object",
         properties: {
@@ -349,12 +406,46 @@ export const openAiTools: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "build_estimate_pdf",
-      description: "Generate estimate summary PDF from a run_estimator result object.",
+      name: "run_viktor_estimate",
+      description:
+        "Viktor-style catalog estimate: gross margin pricing (sell = cost/(1-margin)), default 40% on labor and adders, Good/Better/Best equipment tiers for 3T split heat pump (Y/M/X). Pass customerNotes for keyword adders (e.g. 'tight attic'). Service/repair: use housecall_list_price_book_services instead.",
       parameters: {
         type: "object",
         properties: {
-          estimate: { type: "object", description: "Full EstimateResult from run_estimator" },
+          tonnage: { type: "number", description: "e.g. 3" },
+          systemKind: {
+            type: "string",
+            enum: ["split_heat_pump", "split_ac", "package_heat_pump", "package_ac"],
+          },
+          customerNotes: { type: "string", description: "Free text; matches adders like tight attic, weekend" },
+          adderIds: { type: "array", items: { type: "string" }, description: "Force catalog adder ids" },
+          equipmentMarginMode: { type: "string", enum: ["bundle", "standalone"], description: "bundle uses ~40% equip margin for full replacement" },
+          discountFraction: { type: "number", description: "e.g. 0.2 for 20% off sell" },
+          taxRate: { type: "number" },
+          margins: {
+            type: "object",
+            properties: {
+              equipmentBundle: { type: "number" },
+              equipmentStandalone: { type: "number" },
+              labor: { type: "number" },
+              adder: { type: "number" },
+            },
+          },
+        },
+        required: ["tonnage", "systemKind"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "build_estimate_pdf",
+      description:
+        "Generate PDF from run_estimator (simple) or run_viktor_estimate (tiered catalog-wired layout).",
+      parameters: {
+        type: "object",
+        properties: {
+          estimate: { type: "object", description: "EstimateResult or run_viktor_estimate payload" },
           customerName: { type: "string" },
           address: { type: "string" },
           jobOrEstimateId: { type: "string" },

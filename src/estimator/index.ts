@@ -5,6 +5,18 @@ import { rulesSchema, type EstimatorRules } from "./schema.js";
 
 export type { EstimatorRules } from "./schema.js";
 
+export {
+  defaultViktorCatalog,
+  defaultViktorMargins,
+  matchAddersFromNotes,
+  runViktorCatalogEstimate,
+  type CatalogAdder,
+  type RunViktorCatalogInput,
+  type ViktorCatalogEstimateResult,
+  type ViktorMargins,
+  type SystemKind,
+} from "./viktorCatalogEngine.js";
+
 export type EstimateLine = {
   ruleId: string;
   description: string;
