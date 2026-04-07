@@ -66,6 +66,37 @@ export class HousecallProApiError extends Error {
   }
 }
 
+/**
+ * Same as loadHousecallProConfig but returns null when credentials are missing.
+ * Used by the Slack agent so the process can start for Slack-only testing.
+ */
+export function tryLoadHousecallProConfig(env: NodeJS.ProcessEnv = process.env): HousecallProConfig | null {
+  const parsed = configSchema.safeParse(env);
+  if (!parsed.success) {
+    return null;
+  }
+  const data = parsed.data;
+  if (!data.HOUSECALL_PRO_API_KEY && !data.HOUSECALL_PRO_BEARER_TOKEN) {
+    return null;
+  }
+  return {
+    apiKey: data.HOUSECALL_PRO_API_KEY,
+    bearerToken: data.HOUSECALL_PRO_BEARER_TOKEN,
+    authScheme: data.HOUSECALL_PRO_AUTH_SCHEME,
+    baseUrl: data.HOUSECALL_PRO_BASE_URL.replace(/\/+$/, ""),
+    customersPath: normalizePath(data.HOUSECALL_PRO_CUSTOMERS_PATH),
+    customerPath: normalizePath(data.HOUSECALL_PRO_CUSTOMER_PATH),
+    jobsPath: normalizePath(data.HOUSECALL_PRO_JOBS_PATH),
+    jobPath: normalizePath(data.HOUSECALL_PRO_JOB_PATH),
+    estimatesPath: normalizePath(data.HOUSECALL_PRO_ESTIMATES_PATH),
+    estimatePath: normalizePath(data.HOUSECALL_PRO_ESTIMATE_PATH),
+    invoicesPath: normalizePath(data.HOUSECALL_PRO_INVOICES_PATH),
+    invoicePath: normalizePath(data.HOUSECALL_PRO_INVOICE_PATH),
+    jobInvoicesPath: normalizePath(data.HOUSECALL_PRO_JOB_INVOICES_PATH),
+    leadsPath: normalizePath(data.HOUSECALL_PRO_LEADS_PATH),
+  };
+}
+
 export function loadHousecallProConfig(env: NodeJS.ProcessEnv = process.env): HousecallProConfig {
   const parsed = configSchema.parse(env);
 
