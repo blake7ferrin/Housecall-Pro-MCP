@@ -54,11 +54,23 @@ npm run build
 npm start
 ```
 
-For local development:
+### MCP over HTTP (deploy to Railway, not Vercel)
+
+The default `npm start` uses **stdio** (for Cursor, Claude Desktop, etc.). For a **public URL**, use the **Streamable HTTP** server:
 
 ```bash
-npm run dev
+npm run build
+npm run start:http
 ```
+
+- **MCP base path:** `MCP_HTTP_PATH` (default `/mcp`) — clients use `POST` (and often `GET` for SSE) on that path.
+- **Health check:** `GET /health` → `ok` (set Railway health check to `/health`).
+- **Port:** `PORT` (Railway sets this automatically).
+- **Security:** set `MCP_HTTP_AUTH_TOKEN` and send `Authorization: Bearer <token>` on MCP requests. For production behind a custom domain, set `MCP_ALLOWED_HOSTS` to your hostname (comma-separated) to satisfy DNS rebinding protection.
+
+**Railway:** a `railway.toml` is included with `npm run start:http` as the start command. Add env vars for Housecall Pro and optional `MCP_HTTP_AUTH_TOKEN`.
+
+**Vercel:** not recommended. MCP needs **long-lived** HTTP + SSE sessions; Vercel’s serverless model and timeouts are a poor fit. Use Railway, Fly.io, Render, or a small VPS instead.
 
 To validate auth and the default routes against a real account:
 
@@ -83,6 +95,54 @@ npm run smoke
   }
 }
 ```
+
+## Slack agent (Viktor-style)
+
+This repo also ships a **Slack Bolt** assistant that mirrors an MCP-style tool surface: Housecall Pro reads/writes (when credentials are present), the in-repo **estimator** (`run_estimator`), and **PDF** generators for estimate summaries, inspection reports, and duct cleaning reports.
+
+### Configure Slack
+
+1. Create a Slack app with **Socket Mode** enabled and subscribe to bot events: `app_mention`, `message.im`.
+2. Add OAuth scopes your workflows need (for mentions and DMs: `app_mentions:read`, `chat:write`, `im:history`, `files:write`).
+3. Install the app to your workspace and copy **Bot User OAuth Token** (`SLACK_BOT_TOKEN`) and **App-Level Token** with `connections:write` (`SLACK_APP_TOKEN`).
+
+### Run
+
+```bash
+npm install
+npm run build
+npm run start:slack
+```
+
+For development:
+
+```bash
+npm run dev:slack
+```
+
+Environment variables are listed in `.env.example`. Set `OPENAI_API_KEY` for the tool-calling loop. Housecall Pro keys are optional: without them, estimator + PDF tools still work; the model will tell the user HCP is unavailable.
+
+### Estimator rules
+
+Default line items and bundles live in `src/estimator/defaultRulesData.ts`. Point `ESTIMATOR_RULES_PATH` at a JSON file with the same shape (see `src/estimator/schema.ts`) to override without code changes.
+
+### Viktor-style replacement estimator
+
+`run_viktor_estimate` (Slack/OpenAI tool) implements the logic from the Viktor screenshots:
+
+- **Sell from cost** with gross margin: `price = unitCost / (1 - margin)`.
+- **Labor & adders** default to **40%** margin; **equipment** uses **40%** in full-replacement (`bundle`) mode or **23%** in `standalone` mode.
+- **Good / Better / Best** for **3T split heat pump** uses Y / M / X tier costs calibrated to match the sample totals (~$7,492 / $8,031 / $8,938 with tight attic).
+- **Adders** stack from `customerNotes` keywords (e.g. “tight attic”) or explicit `adderIds`; see `src/estimator/viktorCatalogEngine.ts`.
+- **Service & repair** catalog items are **not** duplicated here — the agent should call **`housecall_list_price_book_services`** per your HCP workflow.
+
+### PDF templates
+
+`src/pdf/pdfGenerator.ts` builds customer-facing PDFs with **pdfkit**. Replace or extend that module to match your branded templates (logos, colors, legal copy). The Slack agent uploads generated PDFs to the thread via `files.uploadV2`.
+
+If you share **Word/PDF/InDesign** (or HTML) templates for duct cleaning, estimate, HVAC inspection, and **new build**, those can be mapped into this generator or a small template engine. An **exported Housecall Pro price book** (CSV/JSON) can back `run_viktor_estimate` or HCP line-item mapping so catalog and API stay aligned.
+
+**Variable-speed adder:** mention “variable speed”, “communicating”, or “inverter” in `customerNotes`, or pass `adderIds: ["adder_variable_speed"]`. Default internal cost is set high for a clear gap vs tight attic; adjust `unitCost` in `viktorCatalogEngine.ts` to match your book.
 
 ## Notes
 
