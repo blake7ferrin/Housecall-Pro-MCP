@@ -54,11 +54,23 @@ npm run build
 npm start
 ```
 
-For local development:
+### MCP over HTTP (deploy to Railway, not Vercel)
+
+The default `npm start` uses **stdio** (for Cursor, Claude Desktop, etc.). For a **public URL**, use the **Streamable HTTP** server:
 
 ```bash
-npm run dev
+npm run build
+npm run start:http
 ```
+
+- **MCP base path:** `MCP_HTTP_PATH` (default `/mcp`) — clients use `POST` (and often `GET` for SSE) on that path.
+- **Health check:** `GET /health` → `ok` (set Railway health check to `/health`).
+- **Port:** `PORT` (Railway sets this automatically).
+- **Security:** set `MCP_HTTP_AUTH_TOKEN` and send `Authorization: Bearer <token>` on MCP requests. For production behind a custom domain, set `MCP_ALLOWED_HOSTS` to your hostname (comma-separated) to satisfy DNS rebinding protection.
+
+**Railway:** a `railway.toml` is included with `npm run start:http` as the start command. Add env vars for Housecall Pro and optional `MCP_HTTP_AUTH_TOKEN`.
+
+**Vercel:** not recommended. MCP needs **long-lived** HTTP + SSE sessions; Vercel’s serverless model and timeouts are a poor fit. Use Railway, Fly.io, Render, or a small VPS instead.
 
 To validate auth and the default routes against a real account:
 

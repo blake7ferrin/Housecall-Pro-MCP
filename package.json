@@ -7,20 +7,24 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
+    "dev:http": "tsx watch src/httpMcp.ts",
     "dev:slack": "tsx watch src/slack/slackAgent.ts",
     "smoke": "tsx src/smoke.ts",
     "start": "node dist/index.js",
+    "start:http": "node dist/httpMcp.js",
     "start:slack": "node dist/slack/slackAgent.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@slack/bolt": "^4.7.0",
     "dotenv": "^17.4.0",
+    "express": "^5.2.1",
     "openai": "^6.33.0",
     "pdfkit": "^0.18.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^24.12.0",
     "@types/pdfkit": "^0.17.5",
     "tsx": "^4.21.0",
