@@ -115,6 +115,22 @@ export const defaultViktorCatalog: ViktorCatalogDefaults = {
     },
   ],
   adders: [
+    {
+      id: "adder_variable_speed",
+      description: "Variable-speed / communicating system — extended commissioning & wiring complexity",
+      /** Higher than typical adders (e.g. tight attic $250 cost → $417 sell @ 40%); tune cost to your catalog */
+      unitCost: 1000,
+      matchKeywords: [
+        "variable speed",
+        "variable-speed",
+        "vs air handler",
+        "communicating",
+        "inverter",
+        "modulating",
+        "velocitech",
+        "comfortbridge",
+      ],
+    },
     { id: "adder_tight_attic", description: "Tight attic", unitCost: 250, matchKeywords: ["tight attic", "cramped attic", "small attic"] },
     { id: "adder_build_in_place", description: "Tight attic — build in place", unitCost: 300, matchKeywords: ["build in place", "build-in-place"] },
     { id: "adder_weekend_sat", description: "Weekend (Saturday)", unitCost: 300, matchKeywords: ["saturday", "weekend sat"] },

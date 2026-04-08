@@ -408,7 +408,7 @@ export const openAiTools: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "run_viktor_estimate",
       description:
-        "Viktor-style catalog estimate: gross margin pricing (sell = cost/(1-margin)), default 40% on labor and adders, Good/Better/Best equipment tiers for 3T split heat pump (Y/M/X). Pass customerNotes for keyword adders (e.g. 'tight attic'). Service/repair: use housecall_list_price_book_services instead.",
+        "Viktor-style catalog estimate: gross margin pricing (sell = cost/(1-margin)), default 40% on labor and adders, Good/Better/Best equipment tiers for 3T split heat pump (Y/M/X). Pass customerNotes for keyword adders (e.g. 'tight attic', 'variable speed', 'communicating'). Service/repair: use housecall_list_price_book_services instead.",
       parameters: {
         type: "object",
         properties: {

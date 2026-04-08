@@ -128,6 +128,10 @@ Default line items and bundles live in `src/estimator/defaultRulesData.ts`. Poin
 
 `src/pdf/pdfGenerator.ts` builds customer-facing PDFs with **pdfkit**. Replace or extend that module to match your branded templates (logos, colors, legal copy). The Slack agent uploads generated PDFs to the thread via `files.uploadV2`.
 
+If you share **Word/PDF/InDesign** (or HTML) templates for duct cleaning, estimate, HVAC inspection, and **new build**, those can be mapped into this generator or a small template engine. An **exported Housecall Pro price book** (CSV/JSON) can back `run_viktor_estimate` or HCP line-item mapping so catalog and API stay aligned.
+
+**Variable-speed adder:** mention “variable speed”, “communicating”, or “inverter” in `customerNotes`, or pass `adderIds: ["adder_variable_speed"]`. Default internal cost is set high for a clear gap vs tight attic; adjust `unitCost` in `viktorCatalogEngine.ts` to match your book.
+
 ## Notes
 
 - Housecall Pro's help center says API access and webhooks are available for MAX customers.
