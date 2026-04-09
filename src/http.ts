@@ -34,7 +34,9 @@ function requireRailwayBearer(req: Request, res: Response, next: NextFunction) {
   res.status(401).json({ error: "Unauthorized" });
 }
 
-const app = createMcpExpressApp();
+// Bind intent must be 0.0.0.0 for public deploys (e.g. Railway). Default "127.0.0.1"
+// enables localhost-only Host validation and rejects real hostnames like *.up.railway.app.
+const app = createMcpExpressApp({ host: "0.0.0.0" });
 
 app.get("/healthz", (_req: Request, res: Response) => {
   res.status(200).json({ ok: true });
