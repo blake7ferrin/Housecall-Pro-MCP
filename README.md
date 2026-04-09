@@ -54,6 +54,44 @@ npm run build
 npm start
 ```
 
+## Deploy on Railway (public URL)
+
+This project can run as a **public HTTP MCP server** (Streamable HTTP) for integrations that need an HTTP endpoint (like Slack bots).
+
+### Environment variables
+
+You must set one of:
+
+- `HOUSECALL_PRO_API_KEY`
+- `HOUSECALL_PRO_BEARER_TOKEN`
+
+Optional (recommended):
+
+- `MCP_BEARER_TOKEN` (protects your public `/mcp` endpoint)
+
+### Railway CLI
+
+```bash
+npm i -g @railway/cli
+railway login
+railway init
+
+# Required Housecall Pro auth
+railway variables set HOUSECALL_PRO_API_KEY="..."
+
+# Recommended: protect your public MCP endpoint
+railway variables set MCP_BEARER_TOKEN="some-long-random-string"
+
+railway up
+railway open
+```
+
+### Endpoints
+
+- `GET /healthz` returns 200 OK.
+- `POST /mcp`, `GET /mcp`, `DELETE /mcp` implement MCP Streamable HTTP.
+  - If `MCP_BEARER_TOKEN` is set, send `Authorization: Bearer <token>`.
+
 For local development:
 
 ```bash
