@@ -113,8 +113,9 @@ export function buildMcpServer(): McpServer {
   const client = new HousecallProClient(config);
 
   const server = new McpServer({
-    name: "housecall-pro-mcp",
-    version: "0.2.0",
+    name: "housecall-pro-connector",
+    title: "Housecall Pro Connector",
+    version: "0.3.0",
   });
 
   server.registerTool(
