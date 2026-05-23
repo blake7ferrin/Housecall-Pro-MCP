@@ -202,6 +202,14 @@ export class HousecallProClient {
     return this.request<T>("DELETE", path, options);
   }
 
+  patch<T = unknown>(path: string, options?: {
+    pathParams?: Record<string, string>;
+    query?: QueryParams;
+    body?: unknown;
+  }) {
+    return this.request<T>("PATCH", path, options);
+  }
+
   listCustomers(query: QueryParams = {}) {
     return this.get(this.config.customersPath, { query });
   }
@@ -235,9 +243,10 @@ export class HousecallProClient {
     });
   }
 
-  getJob(jobId: string) {
+  getJob(jobId: string, query: QueryParams = {}) {
     return this.get(this.config.jobPath, {
       pathParams: { jobId },
+      query,
     });
   }
 
@@ -245,9 +254,10 @@ export class HousecallProClient {
     return this.get(this.config.estimatesPath, { query });
   }
 
-  getEstimate(estimateId: string) {
+  getEstimate(estimateId: string, query: QueryParams = {}) {
     return this.get(this.config.estimatePath, {
       pathParams: { estimateId },
+      query,
     });
   }
 
@@ -277,6 +287,60 @@ export class HousecallProClient {
   createLead(body: Record<string, unknown>) {
     return this.post(this.config.leadsPath, {
       body,
+    });
+  }
+
+  patchCustomer(customerId: string, body: Record<string, unknown>) {
+    return this.patch(this.config.customerPath, {
+      pathParams: { customerId },
+      body,
+    });
+  }
+
+  patchJob(jobId: string, body: Record<string, unknown>) {
+    return this.patch(this.config.jobPath, {
+      pathParams: { jobId },
+      body,
+    });
+  }
+
+  patchEstimate(estimateId: string, body: Record<string, unknown>) {
+    return this.patch(this.config.estimatePath, {
+      pathParams: { estimateId },
+      body,
+    });
+  }
+
+  patchLead(leadId: string, body: Record<string, unknown>) {
+    const base = this.config.leadsPath.replace(/\/+$/, "");
+    return this.patch(`${base}/{id}`, {
+      pathParams: { id: leadId },
+      body,
+    });
+  }
+
+  deleteCustomer(customerId: string) {
+    return this.delete(this.config.customerPath, {
+      pathParams: { customerId },
+    });
+  }
+
+  deleteJob(jobId: string) {
+    return this.delete(this.config.jobPath, {
+      pathParams: { jobId },
+    });
+  }
+
+  deleteEstimate(estimateId: string) {
+    return this.delete(this.config.estimatePath, {
+      pathParams: { estimateId },
+    });
+  }
+
+  deleteLead(leadId: string) {
+    const base = this.config.leadsPath.replace(/\/+$/, "");
+    return this.delete(`${base}/{id}`, {
+      pathParams: { id: leadId },
     });
   }
 }
