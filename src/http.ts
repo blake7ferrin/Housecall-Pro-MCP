@@ -19,8 +19,38 @@ function getPort(): number {
   return parsed;
 }
 
-function requireRailwayBearer(req: Request, res: Response, next: NextFunction) {
-  const token = process.env.MCP_HTTP_BEARER_TOKEN;
+function getBearerToken(): string | undefined {
+  return process.env.MCP_BEARER_TOKEN ?? process.env.MCP_HTTP_BEARER_TOKEN ?? undefined;
+}
+
+function getAllowedHosts(): string[] | undefined {
+  const raw = process.env.MCP_ALLOWED_HOSTS;
+  if (!raw) {
+    return undefined;
+  }
+  const hosts = raw.split(",").map((h) => h.trim()).filter(Boolean);
+  return hosts.length > 0 ? hosts : undefined;
+}
+
+function applyCors(res: Response) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, DELETE, OPTIONS",
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, mcp-session-id, mcp-protocol-version, last-event-id",
+  );
+  res.setHeader(
+    "Access-Control-Expose-Headers",
+    "mcp-session-id, mcp-protocol-version",
+  );
+  res.setHeader("Access-Control-Max-Age", "86400");
+}
+
+function requireBearer(req: Request, res: Response, next: NextFunction) {
+  const token = getBearerToken();
   if (!token) {
     return next();
   }
@@ -31,12 +61,43 @@ function requireRailwayBearer(req: Request, res: Response, next: NextFunction) {
     return next();
   }
 
-  res.status(401).json({ error: "Unauthorized" });
+  res.setHeader(
+    "WWW-Authenticate",
+    'Bearer realm="housecall-pro-connector", error="invalid_token"',
+  );
+  res.status(401).json({
+    jsonrpc: "2.0",
+    error: { code: -32001, message: "Unauthorized" },
+    id: null,
+  });
 }
 
-// Bind intent must be 0.0.0.0 for public deploys (e.g. Railway). Default "127.0.0.1"
-// enables localhost-only Host validation and rejects real hostnames like *.up.railway.app.
-const app = createMcpExpressApp({ host: "0.0.0.0" });
+const allowedHosts = getAllowedHosts();
+// Bind to 0.0.0.0 so platforms like Railway can route traffic to the container.
+const app = createMcpExpressApp({
+  host: "0.0.0.0",
+  ...(allowedHosts ? { allowedHosts } : {}),
+});
+
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  applyCors(res);
+  next();
+});
+
+app.options(/.*/, (_req: Request, res: Response) => {
+  res.status(204).end();
+});
+
+app.get("/", (_req: Request, res: Response) => {
+  res.status(200).json({
+    name: "Housecall Pro Connector",
+    description: "Remote MCP connector for Housecall Pro, usable in Claude.ai chat and Cowork.",
+    mcpEndpoint: "/mcp",
+    healthEndpoint: "/healthz",
+    authRequired: Boolean(getBearerToken()),
+    docs: "https://github.com/blake7ferrin/housecall-pro-mcp",
+  });
+});
 
 app.get("/healthz", (_req: Request, res: Response) => {
   res.status(200).json({ ok: true });
@@ -94,9 +155,9 @@ const mcpHandler = async (req: Request, res: Response) => {
   }
 };
 
-app.post("/mcp", requireRailwayBearer, mcpHandler);
+app.post("/mcp", requireBearer, mcpHandler);
 
-app.get("/mcp", requireRailwayBearer, async (req: Request, res: Response) => {
+app.get("/mcp", requireBearer, async (req: Request, res: Response) => {
   const sessionId = req.header("mcp-session-id") ?? undefined;
   if (!sessionId || !transports[sessionId]) {
     res.status(400).send("Invalid or missing session ID");
@@ -106,7 +167,7 @@ app.get("/mcp", requireRailwayBearer, async (req: Request, res: Response) => {
   await transports[sessionId].handleRequest(req, res);
 });
 
-app.delete("/mcp", requireRailwayBearer, async (req: Request, res: Response) => {
+app.delete("/mcp", requireBearer, async (req: Request, res: Response) => {
   const sessionId = req.header("mcp-session-id") ?? undefined;
   if (!sessionId || !transports[sessionId]) {
     res.status(400).send("Invalid or missing session ID");
@@ -122,6 +183,5 @@ app.listen(port, (error?: unknown) => {
     process.stderr.write(`Failed to start HTTP server: ${String(error)}\n`);
     process.exit(1);
   }
-  process.stdout.write(`MCP HTTP server listening on :${port}\n`);
+  process.stdout.write(`Housecall Pro connector listening on :${port}\n`);
 });
-
