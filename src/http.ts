@@ -20,7 +20,7 @@ function getPort(): number {
 }
 
 function requireRailwayBearer(req: Request, res: Response, next: NextFunction) {
-  const token = process.env.MCP_HTTP_BEARER_TOKEN;
+  const token = process.env.MCP_BEARER_TOKEN;
   if (!token) {
     return next();
   }
