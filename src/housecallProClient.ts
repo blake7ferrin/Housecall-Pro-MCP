@@ -14,6 +14,7 @@ const configSchema = z.object({
   HOUSECALL_PRO_AUTH_SCHEME: z
     .enum(["auto", "bearer", "token", "x-api-key", "authorization"] satisfies HousecallProAuthScheme[])
     .default("auto"),
+  HOUSECALL_PRO_COMPANY_ID: z.string().optional(),
   HOUSECALL_PRO_BASE_URL: z.string().url().default("https://api.housecallpro.com"),
   HOUSECALL_PRO_CUSTOMERS_PATH: z.string().default("/customers"),
   HOUSECALL_PRO_CUSTOMER_PATH: z.string().default("/customers/{customerId}"),
@@ -22,7 +23,7 @@ const configSchema = z.object({
   HOUSECALL_PRO_ESTIMATES_PATH: z.string().default("/estimates"),
   HOUSECALL_PRO_ESTIMATE_PATH: z.string().default("/estimates/{estimateId}"),
   HOUSECALL_PRO_INVOICES_PATH: z.string().default("/invoices"),
-  HOUSECALL_PRO_INVOICE_PATH: z.string().default("/api/invoices/{invoiceId}"),
+  HOUSECALL_PRO_INVOICE_PATH: z.string().default("/invoices/{invoiceId}"),
   HOUSECALL_PRO_JOB_INVOICES_PATH: z.string().default("/jobs/{jobId}/invoices"),
   HOUSECALL_PRO_LEADS_PATH: z.string().default("/leads"),
 });
@@ -79,6 +80,7 @@ export function loadHousecallProConfig(env: NodeJS.ProcessEnv = process.env): Ho
     apiKey: parsed.HOUSECALL_PRO_API_KEY,
     bearerToken: parsed.HOUSECALL_PRO_BEARER_TOKEN,
     authScheme: parsed.HOUSECALL_PRO_AUTH_SCHEME,
+    companyId: parsed.HOUSECALL_PRO_COMPANY_ID,
     baseUrl: parsed.HOUSECALL_PRO_BASE_URL.replace(/\/+$/, ""),
     customersPath: normalizePath(parsed.HOUSECALL_PRO_CUSTOMERS_PATH),
     customerPath: normalizePath(parsed.HOUSECALL_PRO_CUSTOMER_PATH),
@@ -141,6 +143,10 @@ export class HousecallProClient {
           headers.set("Authorization", `Bearer ${credential}`);
           break;
       }
+    }
+
+    if (this.config.companyId) {
+      headers.set("X-Company-Id", this.config.companyId);
     }
 
     return headers;
@@ -263,6 +269,12 @@ export class HousecallProClient {
 
   getInvoice(invoiceId: string) {
     return this.get(this.config.invoicePath, {
+      pathParams: { invoiceId },
+    });
+  }
+
+  getInvoicePreview(invoiceId: string) {
+    return this.get(`${this.config.invoicePath}/preview`, {
       pathParams: { invoiceId },
     });
   }

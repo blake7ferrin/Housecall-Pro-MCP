@@ -10,6 +10,7 @@ export interface HousecallProConfig {
   apiKey?: string;
   bearerToken?: string;
   authScheme: HousecallProAuthScheme;
+  companyId?: string;
   baseUrl: string;
   customersPath: string;
   customerPath: string;

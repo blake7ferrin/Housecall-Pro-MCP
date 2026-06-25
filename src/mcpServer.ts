@@ -93,6 +93,13 @@ const estimateFieldsSchema = z.object({
   jobTypeId: z.string().optional(),
   businessUnitId: z.string().optional(),
 });
+const jobLockStatusSchema = z.enum(["scheduled", "in_progress", "completed"]);
+const scheduleWindowSchema = z.object({
+  dayOfWeek: z.string().min(1),
+  startTime: z.string().min(1),
+  endTime: z.string().min(1),
+  enabled: z.boolean().optional(),
+});
 const leadCustomerSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
@@ -114,7 +121,7 @@ export function buildMcpServer(): McpServer {
 
   const server = new McpServer({
     name: "housecall-pro-mcp",
-    version: "0.2.0",
+    version: "0.2.1",
   });
 
   server.registerTool(
@@ -434,16 +441,19 @@ export function buildMcpServer(): McpServer {
     "housecall_lock_jobs",
     {
       title: "Lock Housecall Pro Jobs",
-      description: "Lock completed or scheduled jobs by time range using POST /jobs/lock.",
+      description:
+        "Lock jobs by time range and work status using POST /jobs/lock. The statuses array is required as of June 2026.",
       inputSchema: {
         startingAt: z.string().datetime(),
         endingAt: z.string().datetime(),
+        statuses: z.array(jobLockStatusSchema).min(1),
       },
     },
-    async ({ startingAt, endingAt }) => runJsonRequest(() => client.post("/jobs/lock", {
+    async ({ startingAt, endingAt, statuses }) => runJsonRequest(() => client.post("/jobs/lock", {
       body: {
         starting_at: startingAt,
         ending_at: endingAt,
+        statuses,
       },
     })),
   );
@@ -667,7 +677,7 @@ export function buildMcpServer(): McpServer {
     "housecall_get_invoice",
     {
       title: "Get Housecall Pro Invoice",
-      description: "Fetch one invoice by UUID using GET /api/invoices/{uuid}.",
+      description: "Fetch one invoice by UUID using GET /invoices/{uuid}.",
       inputSchema: {
         invoiceId: z.string().min(1),
       },
@@ -679,14 +689,12 @@ export function buildMcpServer(): McpServer {
     "housecall_get_invoice_preview",
     {
       title: "Get Housecall Pro Invoice Preview",
-      description: "Fetch invoice preview HTML using GET /api/invoices/{uuid}/preview.",
+      description: "Fetch invoice preview HTML using GET /invoices/{uuid}/preview.",
       inputSchema: {
         invoiceId: z.string().min(1),
       },
     },
-    async ({ invoiceId }) => runJsonRequest(() => client.get("/api/invoices/{uuid}/preview", {
-      pathParams: { uuid: invoiceId },
-    })),
+    async ({ invoiceId }) => runJsonRequest(() => client.getInvoicePreview(invoiceId)),
   );
 
   server.registerTool(
@@ -792,25 +800,28 @@ export function buildMcpServer(): McpServer {
     "housecall_create_webhook_subscription",
     {
       title: "Create Housecall Pro Webhook Subscription",
-      description: "Create a webhook subscription using POST /webhooks/subscription.",
+      description: "Create a webhook subscription using POST /webhook_subscriptions.",
       inputSchema: {
-        payload: looseObject,
+        url: z.string().url(),
+        events: z.array(z.string().min(1)).min(1),
       },
     },
-    async ({ payload }) => runJsonRequest(() => client.post("/webhooks/subscription", { body: payload })),
+    async ({ url, events }) => runJsonRequest(() => client.post("/webhook_subscriptions", {
+      body: { url, events },
+    })),
   );
 
   server.registerTool(
     "housecall_delete_webhook_subscription",
     {
       title: "Delete Housecall Pro Webhook Subscription",
-      description: "Delete a webhook subscription using DELETE /webhooks/subscription.",
+      description: "Delete a webhook subscription using DELETE /webhook_subscriptions/{subscription_id}.",
       inputSchema: {
-        payload: looseObject.optional(),
+        subscriptionId: z.string().min(1),
       },
     },
-    async ({ payload }) => runJsonRequest(() => client.delete("/webhooks/subscription", {
-      ...(payload === undefined ? {} : { body: payload }),
+    async ({ subscriptionId }) => runJsonRequest(() => client.delete("/webhook_subscriptions/{subscription_id}", {
+      pathParams: { subscription_id: subscriptionId },
     })),
   );
 
@@ -827,45 +838,30 @@ export function buildMcpServer(): McpServer {
   server.registerTool(
     "housecall_get_schedule_availability",
     {
-      title: "Get Housecall Pro Schedule Availability",
-      description: "Fetch company schedule availability using GET /company/schedule_availability.",
+      title: "Get Housecall Pro Schedule Windows",
+      description: "Fetch company schedule windows using GET /company/schedule_availability/schedule_windows.",
       inputSchema: {},
     },
-    async () => runJsonRequest(() => client.get("/company/schedule_availability")),
+    async () => runJsonRequest(() => client.get("/company/schedule_availability/schedule_windows")),
   );
 
   server.registerTool(
     "housecall_update_schedule_availability",
     {
-      title: "Update Housecall Pro Schedule Availability",
-      description: "Update company schedule windows using PUT /company/schedule_availability.",
+      title: "Update Housecall Pro Schedule Windows",
+      description: "Update company schedule windows using PUT /company/schedule_availability/schedule_windows.",
       inputSchema: {
-        availabilityBufferInDays: z.number().int().nonnegative().optional(),
-        dailyScheduleWindows: z.array(z.object({
-          dayName: z.string(),
-          scheduleWindows: z.array(z.object({
-            startTime: z.string(),
-            endTime: z.string(),
-          })),
-        })).optional(),
-        custom: looseObject.optional(),
+        scheduleWindows: z.array(scheduleWindowSchema).min(1),
       },
     },
-    async ({ availabilityBufferInDays, dailyScheduleWindows, custom }) => runJsonRequest(() => client.put("/company/schedule_availability", {
+    async ({ scheduleWindows }) => runJsonRequest(() => client.put("/company/schedule_availability/schedule_windows", {
       body: {
-        ...(availabilityBufferInDays === undefined ? {} : { availability_buffer_in_days: availabilityBufferInDays }),
-        ...(dailyScheduleWindows === undefined
-          ? {}
-          : {
-            daily_schedule_windows: dailyScheduleWindows.map((day) => ({
-              day_name: day.dayName,
-              schedule_windows: day.scheduleWindows.map((window) => ({
-                start_time: window.startTime,
-                end_time: window.endTime,
-              })),
-            })),
-          }),
-        ...(custom ?? {}),
+        schedule_windows: scheduleWindows.map((window) => ({
+          day_of_week: window.dayOfWeek,
+          start_time: window.startTime,
+          end_time: window.endTime,
+          ...(window.enabled === undefined ? {} : { enabled: window.enabled }),
+        })),
       },
     })),
   );
@@ -876,22 +872,18 @@ export function buildMcpServer(): McpServer {
       title: "Get Housecall Pro Booking Windows",
       description: "Fetch online-booking windows using GET /company/schedule_availability/booking_windows.",
       inputSchema: {
-        showForDays: z.number().int().positive().optional(),
         startDate: z.string().optional(),
+        endDate: z.string().optional(),
         serviceId: z.string().optional(),
         serviceDuration: z.number().int().positive().optional(),
-        priceFormId: z.string().optional(),
-        employeeIds: stringArray.optional(),
       },
     },
     async (input) => runJsonRequest(() => client.get("/company/schedule_availability/booking_windows", {
       query: {
-        show_for_days: input.showForDays,
         start_date: input.startDate,
+        end_date: input.endDate,
         service_id: input.serviceId,
         service_duration: input.serviceDuration,
-        price_form_id: input.priceFormId,
-        employee_ids: input.employeeIds,
       },
     })),
   );
@@ -1187,12 +1179,12 @@ export function buildMcpServer(): McpServer {
     "housecall_list_job_types",
     {
       title: "List Housecall Pro Job Types",
-      description: "List job types using GET /job_fields/job_types.",
+      description: "List job types using GET /job_types.",
       inputSchema: {
         name: z.string().optional(),
       },
     },
-    async ({ name }) => runJsonRequest(() => client.get("/job_fields/job_types", {
+    async ({ name }) => runJsonRequest(() => client.get("/job_types", {
       query: { name },
     })),
   );
@@ -1201,25 +1193,25 @@ export function buildMcpServer(): McpServer {
     "housecall_create_job_type",
     {
       title: "Create Housecall Pro Job Type",
-      description: "Create a job type using POST /job_fields/job_types.",
+      description: "Create a job type using POST /job_types.",
       inputSchema: {
         name: z.string().min(1),
       },
     },
-    async ({ name }) => runJsonRequest(() => client.post("/job_fields/job_types", { body: { name } })),
+    async ({ name }) => runJsonRequest(() => client.post("/job_types", { body: { name } })),
   );
 
   server.registerTool(
     "housecall_update_job_type",
     {
       title: "Update Housecall Pro Job Type",
-      description: "Update a job type using PUT /job_fields/job_types/{job_type_id}.",
+      description: "Update a job type using PUT /job_types/{job_type_id}.",
       inputSchema: {
         jobTypeId: z.string().min(1),
         name: z.string().min(1),
       },
     },
-    async ({ jobTypeId, name }) => runJsonRequest(() => client.put("/job_fields/job_types/{job_type_id}", {
+    async ({ jobTypeId, name }) => runJsonRequest(() => client.put("/job_types/{job_type_id}", {
       pathParams: { job_type_id: jobTypeId },
       body: { name },
     })),
@@ -1367,38 +1359,28 @@ export function buildMcpServer(): McpServer {
     "housecall_list_pipeline_statuses",
     {
       title: "List Housecall Pro Pipeline Statuses",
-      description: "List pipeline statuses for leads, jobs, or estimates using GET /pipeline/statuses.",
-      inputSchema: {
-        resourceType: z.enum(["lead", "job", "estimate"]),
-        page: z.number().int().positive().optional(),
-        pageSize: z.number().int().positive().max(200).optional(),
-      },
+      description: "List pipeline statuses for leads, jobs, and estimates using GET /pipeline/statuses.",
+      inputSchema: {},
     },
-    async ({ resourceType, page, pageSize }) => runJsonRequest(() => client.get("/pipeline/statuses", {
-      query: {
-        resource_type: resourceType,
-        page,
-        page_size: pageSize,
-      },
-    })),
+    async () => runJsonRequest(() => client.get("/pipeline/statuses")),
   );
 
   server.registerTool(
     "housecall_update_pipeline_status",
     {
       title: "Update Housecall Pro Pipeline Status",
-      description: "Move a lead, job, or estimate to a pipeline status using PUT /pipeline/statuses.",
+      description: "Move a lead, job, or estimate to a pipeline status using PUT /pipeline/statuses/{status_id}.",
       inputSchema: {
         resourceType: z.enum(["lead", "job", "estimate"]),
         resourceId: z.string().min(1),
         statusId: z.string().min(1),
       },
     },
-    async ({ resourceType, resourceId, statusId }) => runJsonRequest(() => client.put("/pipeline/statuses", {
+    async ({ resourceType, resourceId, statusId }) => runJsonRequest(() => client.put("/pipeline/statuses/{status_id}", {
+      pathParams: { status_id: statusId },
       body: {
         resource_type: resourceType,
         resource_id: resourceId,
-        status_id: statusId,
       },
     })),
   );

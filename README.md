@@ -5,12 +5,12 @@ This is a standalone Model Context Protocol server for Housecall Pro.
 ## What it does
 
 - Customers: list, get, create, update, list addresses, get address, create address
-- Jobs: list, get, create, lock by time range
+- Jobs: list, get, create, lock by time range and status
 - Estimates: list, get, create
 - Invoices: list, get by UUID, list for a job
 - Leads: list, get, create, convert, list lead line items
 - Application: get, enable, disable
-- Company and scheduling: get company, get schedule availability, update schedule availability, get booking windows
+- Company and scheduling: get company, get/update schedule windows, get booking windows
 - Metadata: employees, checklists, events, tags, lead sources, job types, service zones, routes, pipeline statuses
 - Price book: materials, material categories, price forms, services
 
@@ -29,7 +29,7 @@ The current defaults in this project are:
 - `/estimates`
 - `/estimates/{estimateId}`
 - `/invoices`
-- `/api/invoices/{invoiceId}`
+- `/invoices/{invoiceId}`
 - `/jobs/{jobId}/invoices`
 - `/leads`
 
@@ -39,9 +39,10 @@ If your tenant uses a different auth header or different paths, update `.env`.
 
 1. Copy `.env.example` to `.env`.
 2. Set `HOUSECALL_PRO_API_KEY` or `HOUSECALL_PRO_BEARER_TOKEN`.
-3. If needed, set `HOUSECALL_PRO_AUTH_SCHEME` to `auto`, `bearer`, `token`, `x-api-key`, or `authorization`.
-4. Install dependencies.
-5. Build the server.
+3. For multi-location accounts, optionally set `HOUSECALL_PRO_COMPANY_ID` to scope requests with the `X-Company-Id` header.
+4. If needed, set `HOUSECALL_PRO_AUTH_SCHEME` to `auto`, `bearer`, `token`, `x-api-key`, or `authorization`.
+5. Install dependencies.
+6. Build the server.
 
 ```bash
 npm install
@@ -67,7 +68,8 @@ You must set one of:
 
 Optional (recommended):
 
-- `MCP_BEARER_TOKEN` (protects your public `/mcp` endpoint)
+- `MCP_HTTP_BEARER_TOKEN` (protects your public `/mcp` endpoint)
+- `HOUSECALL_PRO_COMPANY_ID` (scopes API requests to a specific sub-location)
 
 ### Railway CLI
 
@@ -80,7 +82,7 @@ railway init
 railway variables set HOUSECALL_PRO_API_KEY="..."
 
 # Recommended: protect your public MCP endpoint
-railway variables set MCP_BEARER_TOKEN="some-long-random-string"
+railway variables set MCP_HTTP_BEARER_TOKEN="some-long-random-string"
 
 railway up
 railway open
@@ -90,7 +92,7 @@ railway open
 
 - `GET /healthz` returns 200 OK.
 - `POST /mcp`, `GET /mcp`, `DELETE /mcp` implement MCP Streamable HTTP.
-  - If `MCP_BEARER_TOKEN` is set, send `Authorization: Bearer <token>`.
+  - If `MCP_HTTP_BEARER_TOKEN` is set, send `Authorization: Bearer <token>`.
 
 For local development:
 
@@ -128,4 +130,5 @@ npm run smoke
 - This project has been live-validated against customer, job, estimate, invoice, company, employee, lead source, job type, tag, service zone, route, and pipeline-status read routes on `https://api.housecallpro.com`.
 - In `auto` mode, the client uses `Authorization: Token ...` for API keys and `Authorization: Bearer ...` for OAuth tokens, matching Housecall Pro's published auth guidance.
 - Your current credential can read most company-level resources, but `GET /application` and write routes like `POST /customers`, `POST /jobs`, and `POST /estimates` returned `401 Unauthorized ... does not have the necessary permissions`.
-- Webhook subscription endpoints are mapped in the MCP, but Housecall Pro's OpenAPI spec does not describe the request body shape in detail, so those tools accept a generic JSON payload.
+- Webhook subscription tools use `POST /webhook_subscriptions` and `DELETE /webhook_subscriptions/{subscription_id}`.
+- `POST /jobs/lock` requires a `statuses` array (`scheduled`, `in_progress`, or `completed`) as of June 2026.
