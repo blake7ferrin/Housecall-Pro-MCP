@@ -10,6 +10,7 @@ import {
 import { registerMcpPrompts } from "./mcpPrompts.js";
 import { registerMcpResources } from "./mcpResources.js";
 import { runJsonRequest, textResponse } from "./mcpHelpers.js";
+import { registerPriceBookAndEstimateTools } from "./priceBookAndEstimates.js";
 import { registerWorkflowTools } from "./workflows.js";
 
 const looseObject = z.record(z.string(), z.unknown());
@@ -96,7 +97,7 @@ export function buildMcpServer(): McpServer {
 
   const server = new McpServer({
     name: "housecall-pro-mcp",
-    version: "0.4.0",
+    version: "0.5.0",
   });
 
   server.registerTool(
@@ -1541,6 +1542,7 @@ export function buildMcpServer(): McpServer {
   );
 
   registerWorkflowTools(server, client);
+  registerPriceBookAndEstimateTools(server, client);
   registerMcpResources(server, client);
   registerMcpPrompts(server);
 

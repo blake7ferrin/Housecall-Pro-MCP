@@ -1,6 +1,6 @@
 {
   "name": "housecall-pro-mcp",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Model Context Protocol server for Housecall Pro",

@@ -7,15 +7,15 @@ This is a standalone Model Context Protocol server for Housecall Pro.
 - Customers: list, get, create, update, list addresses, get address, create address
 - Jobs: list, get, create, update/clear schedule, dispatch, create appointment, lock (single or bulk), add/delete notes, add/remove tags, create links, list materials
 - Workflows: find-or-create customer, book job, schedule-and-dispatch, convert lead to job, fetch all pages
-- MCP resources: company, employees, job types, lead sources, tags, pipeline statuses, API conventions, webhook events
+- MCP resources: company, employees, job types, lead sources, tags, pipeline statuses, price book services, API conventions, webhook events
 - MCP prompts: morning dispatch briefing, estimate follow-up, invoice aging, book service call
-- Estimates: list, get, create
+- Estimates: list, get, create, approve/decline options, manage options (create, line items, schedule, notes, links)
 - Invoices: list, get by UUID, list for a job
 - Leads: list, get, create, convert, list lead line items
 - Application: get, enable, disable
 - Company and scheduling: get company, get/update schedule windows, get booking windows
 - Metadata: employees, checklists, events, tags, lead sources, job types, service zones, routes, pipeline statuses
-- Price book: materials, material categories, price forms, services
+- Price book: list/create/update/delete materials, material categories, and price forms; list services
 
 ## Why the routes are configurable
 

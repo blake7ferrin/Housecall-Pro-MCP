@@ -116,6 +116,25 @@ export function registerMcpResources(server: McpServer, client: HousecallProClie
   );
 
   server.registerResource(
+    "housecall-price-book-services",
+    `${RESOURCE_BASE_URI}/price-book-services`,
+    {
+      title: "Housecall Pro Price Book Services",
+      description: "Price book services catalog for quoting and booking.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      try {
+        return resourceJsonResponse(uri.href, await client.get("/api/price_book/services", {
+          query: { page: 1, page_size: 200 },
+        }));
+      } catch (error) {
+        return resourceErrorResponse(uri.href, error);
+      }
+    },
+  );
+
+  server.registerResource(
     "housecall-webhook-events",
     `${RESOURCE_BASE_URI}/webhook-events`,
     {
