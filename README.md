@@ -5,7 +5,7 @@ This is a standalone Model Context Protocol server for Housecall Pro.
 ## What it does
 
 - Customers: list, get, create, update, list addresses, get address, create address
-- Jobs: list, get, create, lock by time range and status
+- Jobs: list, get, create, update/clear schedule, dispatch, create appointment, lock (single or bulk), add/delete notes, add/remove tags, create links, list materials
 - Estimates: list, get, create
 - Invoices: list, get by UUID, list for a job
 - Leads: list, get, create, convert, list lead line items
@@ -40,9 +40,10 @@ If your tenant uses a different auth header or different paths, update `.env`.
 1. Copy `.env.example` to `.env`.
 2. Set `HOUSECALL_PRO_API_KEY` or `HOUSECALL_PRO_BEARER_TOKEN`.
 3. For multi-location accounts, optionally set `HOUSECALL_PRO_COMPANY_ID` to scope requests with the `X-Company-Id` header.
-4. If needed, set `HOUSECALL_PRO_AUTH_SCHEME` to `auto`, `bearer`, `token`, `x-api-key`, or `authorization`.
-5. Install dependencies.
-6. Build the server.
+4. For OAuth integrations, set `HOUSECALL_PRO_BEARER_TOKEN` plus the `HOUSECALL_PRO_OAUTH_*` variables to enable automatic token refresh on 401 responses.
+5. If needed, set `HOUSECALL_PRO_AUTH_SCHEME` to `auto`, `bearer`, `token`, `x-api-key`, or `authorization`.
+6. Install dependencies.
+7. Build the server.
 
 ```bash
 npm install
@@ -70,6 +71,8 @@ Optional (recommended):
 
 - `MCP_HTTP_BEARER_TOKEN` (protects your public `/mcp` endpoint)
 - `HOUSECALL_PRO_COMPANY_ID` (scopes API requests to a specific sub-location)
+- `HOUSECALL_PRO_OAUTH_CLIENT_ID`, `HOUSECALL_PRO_OAUTH_CLIENT_SECRET`, `HOUSECALL_PRO_OAUTH_REFRESH_TOKEN`, `HOUSECALL_PRO_OAUTH_REDIRECT_URI` (automatic OAuth token refresh)
+- `HOUSECALL_PRO_RATE_LIMIT_MAX_RETRIES` (retries on HTTP 429, default `3`)
 
 ### Railway CLI
 
@@ -129,6 +132,8 @@ npm run smoke
 - Housecall Pro's help center says API access and webhooks are available for MAX customers.
 - This project has been live-validated against customer, job, estimate, invoice, company, employee, lead source, job type, tag, service zone, route, and pipeline-status read routes on `https://api.housecallpro.com`.
 - In `auto` mode, the client uses `Authorization: Token ...` for API keys and `Authorization: Bearer ...` for OAuth tokens, matching Housecall Pro's published auth guidance.
+- When OAuth refresh credentials are configured, the client automatically refreshes expired bearer tokens on 401 and retries the request once.
+- The client retries rate-limited requests (HTTP 429) with exponential backoff.
 - Your current credential can read most company-level resources, but `GET /application` and write routes like `POST /customers`, `POST /jobs`, and `POST /estimates` returned `401 Unauthorized ... does not have the necessary permissions`.
 - Webhook subscription tools use `POST /webhook_subscriptions` and `DELETE /webhook_subscriptions/{subscription_id}`.
 - `POST /jobs/lock` requires a `statuses` array (`scheduled`, `in_progress`, or `completed`) as of June 2026.

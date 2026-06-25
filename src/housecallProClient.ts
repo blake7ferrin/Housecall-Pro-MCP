@@ -26,6 +26,11 @@ const configSchema = z.object({
   HOUSECALL_PRO_INVOICE_PATH: z.string().default("/invoices/{invoiceId}"),
   HOUSECALL_PRO_JOB_INVOICES_PATH: z.string().default("/jobs/{jobId}/invoices"),
   HOUSECALL_PRO_LEADS_PATH: z.string().default("/leads"),
+  HOUSECALL_PRO_OAUTH_CLIENT_ID: z.string().optional(),
+  HOUSECALL_PRO_OAUTH_CLIENT_SECRET: z.string().optional(),
+  HOUSECALL_PRO_OAUTH_REFRESH_TOKEN: z.string().optional(),
+  HOUSECALL_PRO_OAUTH_REDIRECT_URI: z.string().url().optional(),
+  HOUSECALL_PRO_RATE_LIMIT_MAX_RETRIES: z.coerce.number().int().nonnegative().default(3),
 });
 
 function normalizePath(path: string): string {
@@ -57,6 +62,21 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   return response.text();
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+interface OAuthTokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type?: string;
+  expires_in?: number;
+  scope?: string;
+  created_at?: string;
+}
+
 export class HousecallProApiError extends Error {
   details: HousecallProErrorDetails;
 
@@ -76,11 +96,40 @@ export function loadHousecallProConfig(env: NodeJS.ProcessEnv = process.env): Ho
     );
   }
 
+  const oauthCredentialsPresent = Boolean(
+    parsed.HOUSECALL_PRO_OAUTH_CLIENT_ID
+      || parsed.HOUSECALL_PRO_OAUTH_CLIENT_SECRET
+      || parsed.HOUSECALL_PRO_OAUTH_REFRESH_TOKEN
+      || parsed.HOUSECALL_PRO_OAUTH_REDIRECT_URI,
+  );
+
+  if (oauthCredentialsPresent) {
+    if (
+      !parsed.HOUSECALL_PRO_OAUTH_CLIENT_ID
+      || !parsed.HOUSECALL_PRO_OAUTH_CLIENT_SECRET
+      || !parsed.HOUSECALL_PRO_OAUTH_REFRESH_TOKEN
+      || !parsed.HOUSECALL_PRO_OAUTH_REDIRECT_URI
+    ) {
+      throw new Error(
+        "OAuth refresh requires HOUSECALL_PRO_OAUTH_CLIENT_ID, HOUSECALL_PRO_OAUTH_CLIENT_SECRET, HOUSECALL_PRO_OAUTH_REFRESH_TOKEN, and HOUSECALL_PRO_OAUTH_REDIRECT_URI.",
+      );
+    }
+  }
+
   return {
     apiKey: parsed.HOUSECALL_PRO_API_KEY,
     bearerToken: parsed.HOUSECALL_PRO_BEARER_TOKEN,
     authScheme: parsed.HOUSECALL_PRO_AUTH_SCHEME,
     companyId: parsed.HOUSECALL_PRO_COMPANY_ID,
+    oauth: oauthCredentialsPresent
+      ? {
+        clientId: parsed.HOUSECALL_PRO_OAUTH_CLIENT_ID!,
+        clientSecret: parsed.HOUSECALL_PRO_OAUTH_CLIENT_SECRET!,
+        refreshToken: parsed.HOUSECALL_PRO_OAUTH_REFRESH_TOKEN!,
+        redirectUri: parsed.HOUSECALL_PRO_OAUTH_REDIRECT_URI!,
+      }
+      : undefined,
+    rateLimitMaxRetries: parsed.HOUSECALL_PRO_RATE_LIMIT_MAX_RETRIES,
     baseUrl: parsed.HOUSECALL_PRO_BASE_URL.replace(/\/+$/, ""),
     customersPath: normalizePath(parsed.HOUSECALL_PRO_CUSTOMERS_PATH),
     customerPath: normalizePath(parsed.HOUSECALL_PRO_CUSTOMER_PATH),
@@ -96,7 +145,67 @@ export function loadHousecallProConfig(env: NodeJS.ProcessEnv = process.env): Ho
 }
 
 export class HousecallProClient {
-  constructor(private readonly config: HousecallProConfig) {}
+  private bearerToken?: string;
+  private oauth?: HousecallProConfig["oauth"];
+
+  constructor(private readonly config: HousecallProConfig) {
+    this.bearerToken = config.bearerToken;
+    this.oauth = config.oauth ? { ...config.oauth } : undefined;
+  }
+
+  private canRefreshOAuth(): boolean {
+    return Boolean(this.oauth);
+  }
+
+  private async refreshOAuthToken(): Promise<void> {
+    if (!this.oauth) {
+      throw new Error("OAuth refresh credentials are not configured.");
+    }
+
+    const response = await fetch(`${this.config.baseUrl}/oauth/token`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: this.oauth.clientId,
+        client_secret: this.oauth.clientSecret,
+        grant_type: "refresh_token",
+        refresh_token: this.oauth.refreshToken,
+        redirect_uri: this.oauth.redirectUri,
+      }),
+    });
+
+    const body = await parseResponseBody(response);
+
+    if (!response.ok) {
+      throw new HousecallProApiError(`Housecall Pro OAuth token refresh failed: ${response.status} ${response.statusText}`, {
+        status: response.status,
+        statusText: response.statusText,
+        body,
+      });
+    }
+
+    const tokenResponse = body as OAuthTokenResponse;
+
+    if (!tokenResponse.access_token) {
+      throw new HousecallProApiError("Housecall Pro OAuth token refresh returned no access_token.", {
+        status: response.status,
+        statusText: response.statusText,
+        body,
+      });
+    }
+
+    this.bearerToken = tokenResponse.access_token;
+
+    if (tokenResponse.refresh_token) {
+      this.oauth = {
+        ...this.oauth,
+        refreshToken: tokenResponse.refresh_token,
+      };
+    }
+  }
 
   private buildUrl(pathTemplate: string, pathParams: Record<string, string> = {}, query?: QueryParams): URL {
     const resolvedPath = Object.entries(pathParams).reduce((path, [key, value]) => {
@@ -121,11 +230,11 @@ export class HousecallProClient {
       headers.set("Content-Type", "application/json");
     }
 
-    const credential = this.config.bearerToken ?? this.config.apiKey;
+    const credential = this.bearerToken ?? this.config.apiKey;
 
     if (credential) {
       const effectiveScheme = this.config.authScheme === "auto"
-        ? (this.config.bearerToken ? "bearer" : "token")
+        ? (this.bearerToken ? "bearer" : "token")
         : this.config.authScheme;
 
       switch (effectiveScheme) {
@@ -152,7 +261,7 @@ export class HousecallProClient {
     return headers;
   }
 
-  private async request<T>(method: string, path: string, options?: {
+  private async executeRequest<T>(method: string, path: string, options?: {
     pathParams?: Record<string, string>;
     query?: QueryParams;
     body?: unknown;
@@ -175,6 +284,38 @@ export class HousecallProClient {
     }
 
     return body as T;
+  }
+
+  private async request<T>(method: string, path: string, options?: {
+    pathParams?: Record<string, string>;
+    query?: QueryParams;
+    body?: unknown;
+  }, hasRefreshedOAuth = false): Promise<T> {
+    let rateLimitAttempt = 0;
+
+    while (true) {
+      try {
+        return await this.executeRequest<T>(method, path, options);
+      } catch (error) {
+        if (!(error instanceof HousecallProApiError)) {
+          throw error;
+        }
+
+        if (error.details.status === 401 && !hasRefreshedOAuth && this.canRefreshOAuth()) {
+          await this.refreshOAuthToken();
+          return this.request<T>(method, path, options, true);
+        }
+
+        if (error.details.status === 429 && rateLimitAttempt < this.config.rateLimitMaxRetries) {
+          const delayMs = Math.min(1_000 * (2 ** rateLimitAttempt), 32_000);
+          rateLimitAttempt += 1;
+          await sleep(delayMs);
+          continue;
+        }
+
+        throw error;
+      }
+    }
   }
 
   get<T = unknown>(path: string, options?: {

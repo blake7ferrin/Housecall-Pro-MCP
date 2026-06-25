@@ -93,6 +93,19 @@ const estimateFieldsSchema = z.object({
   jobTypeId: z.string().optional(),
   businessUnitId: z.string().optional(),
 });
+const jobScheduleUpdateSchema = z.object({
+  scheduledStart: z.string().optional(),
+  scheduledEnd: z.string().optional(),
+  arrivalWindow: z.number().int().nonnegative().optional(),
+  anytime: z.boolean().optional(),
+});
+const jobAppointmentCreateSchema = z.object({
+  startTime: z.string().min(1),
+  endTime: z.string().min(1),
+  arrivalWindowMinutes: z.number().int().nonnegative().optional(),
+  anytime: z.boolean().optional(),
+  dispatchedEmployeeIds: stringArray.optional(),
+});
 const jobLockStatusSchema = z.enum(["scheduled", "in_progress", "completed"]);
 const scheduleWindowSchema = z.object({
   dayOfWeek: z.string().min(1),
@@ -121,7 +134,7 @@ export function buildMcpServer(): McpServer {
 
   const server = new McpServer({
     name: "housecall-pro-mcp",
-    version: "0.2.1",
+    version: "0.3.0",
   });
 
   server.registerTool(
@@ -435,6 +448,186 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ jobId }) => runJsonRequest(() => client.getJob(jobId)),
+  );
+
+  server.registerTool(
+    "housecall_update_job_schedule",
+    {
+      title: "Update Housecall Pro Job Schedule",
+      description: "Update a job schedule using PUT /jobs/{job_id}/schedule.",
+      inputSchema: {
+        jobId: z.string().min(1),
+        schedule: jobScheduleUpdateSchema,
+      },
+    },
+    async ({ jobId, schedule }) => runJsonRequest(() => client.put("/jobs/{jobId}/schedule", {
+      pathParams: { jobId },
+      body: {
+        ...(schedule.scheduledStart === undefined ? {} : { scheduled_start: schedule.scheduledStart }),
+        ...(schedule.scheduledEnd === undefined ? {} : { scheduled_end: schedule.scheduledEnd }),
+        ...(schedule.arrivalWindow === undefined ? {} : { arrival_window: schedule.arrivalWindow }),
+        ...(schedule.anytime === undefined ? {} : { anytime: schedule.anytime }),
+      },
+    })),
+  );
+
+  server.registerTool(
+    "housecall_clear_job_schedule",
+    {
+      title: "Clear Housecall Pro Job Schedule",
+      description: "Clear a job schedule and set it to unscheduled using DELETE /jobs/{job_id}/schedule.",
+      inputSchema: {
+        jobId: z.string().min(1),
+      },
+    },
+    async ({ jobId }) => runJsonRequest(() => client.delete("/jobs/{jobId}/schedule", {
+      pathParams: { jobId },
+    })),
+  );
+
+  server.registerTool(
+    "housecall_dispatch_job",
+    {
+      title: "Dispatch Housecall Pro Job",
+      description: "Dispatch a job to one or more employees using PUT /jobs/{job_id}/dispatch.",
+      inputSchema: {
+        jobId: z.string().min(1),
+        employeeIds: z.array(z.string().min(1)).min(1),
+      },
+    },
+    async ({ jobId, employeeIds }) => runJsonRequest(() => client.put("/jobs/{jobId}/dispatch", {
+      pathParams: { jobId },
+      body: { employee_ids: employeeIds },
+    })),
+  );
+
+  server.registerTool(
+    "housecall_create_job_appointment",
+    {
+      title: "Create Housecall Pro Job Appointment",
+      description: "Create a new appointment for a job using POST /jobs/{job_id}/appointments.",
+      inputSchema: {
+        jobId: z.string().min(1),
+        appointment: jobAppointmentCreateSchema,
+      },
+    },
+    async ({ jobId, appointment }) => runJsonRequest(() => client.post("/jobs/{jobId}/appointments", {
+      pathParams: { jobId },
+      body: {
+        start_time: appointment.startTime,
+        end_time: appointment.endTime,
+        ...(appointment.arrivalWindowMinutes === undefined ? {} : { arrival_window_minutes: appointment.arrivalWindowMinutes }),
+        ...(appointment.anytime === undefined ? {} : { anytime: appointment.anytime }),
+        ...(appointment.dispatchedEmployeeIds === undefined ? {} : { dispatched_employees_ids: appointment.dispatchedEmployeeIds }),
+      },
+    })),
+  );
+
+  server.registerTool(
+    "housecall_lock_job",
+    {
+      title: "Lock Housecall Pro Job",
+      description: "Lock a single job by ID using POST /jobs/{job_id}/lock.",
+      inputSchema: {
+        jobId: z.string().min(1),
+      },
+    },
+    async ({ jobId }) => runJsonRequest(() => client.post("/jobs/{jobId}/lock", {
+      pathParams: { jobId },
+    })),
+  );
+
+  server.registerTool(
+    "housecall_add_job_note",
+    {
+      title: "Add Housecall Pro Job Note",
+      description: "Add a note to a job using POST /jobs/{job_id}/notes.",
+      inputSchema: {
+        jobId: z.string().min(1),
+        content: z.string().min(1),
+      },
+    },
+    async ({ jobId, content }) => runJsonRequest(() => client.post("/jobs/{jobId}/notes", {
+      pathParams: { jobId },
+      body: { content },
+    })),
+  );
+
+  server.registerTool(
+    "housecall_delete_job_note",
+    {
+      title: "Delete Housecall Pro Job Note",
+      description: "Delete a note from a job using DELETE /jobs/{job_id}/notes/{note_id}.",
+      inputSchema: {
+        jobId: z.string().min(1),
+        noteId: z.string().min(1),
+      },
+    },
+    async ({ jobId, noteId }) => runJsonRequest(() => client.delete("/jobs/{jobId}/notes/{noteId}", {
+      pathParams: { jobId, noteId },
+    })),
+  );
+
+  server.registerTool(
+    "housecall_add_job_tag",
+    {
+      title: "Add Housecall Pro Job Tag",
+      description: "Add a tag to a job using POST /jobs/{job_id}/tags.",
+      inputSchema: {
+        jobId: z.string().min(1),
+        name: z.string().min(1),
+      },
+    },
+    async ({ jobId, name }) => runJsonRequest(() => client.post("/jobs/{jobId}/tags", {
+      pathParams: { jobId },
+      body: { name },
+    })),
+  );
+
+  server.registerTool(
+    "housecall_remove_job_tag",
+    {
+      title: "Remove Housecall Pro Job Tag",
+      description: "Remove a tag from a job using DELETE /jobs/{job_id}/tags/{tag_id}.",
+      inputSchema: {
+        jobId: z.string().min(1),
+        tagId: z.string().min(1),
+      },
+    },
+    async ({ jobId, tagId }) => runJsonRequest(() => client.delete("/jobs/{jobId}/tags/{tagId}", {
+      pathParams: { jobId, tagId },
+    })),
+  );
+
+  server.registerTool(
+    "housecall_create_job_link",
+    {
+      title: "Create Housecall Pro Job Link",
+      description: "Create a link on a job using POST /jobs/{job_id}/links.",
+      inputSchema: {
+        jobId: z.string().min(1),
+        title: z.string().min(1),
+        url: z.string().url(),
+      },
+    },
+    async ({ jobId, title, url }) => runJsonRequest(() => client.post("/jobs/{jobId}/links", {
+      pathParams: { jobId },
+      body: { title, url },
+    })),
+  );
+
+  server.registerTool(
+    "housecall_list_job_materials",
+    {
+      title: "List Housecall Pro Job Materials",
+      description: "List input materials for a job using GET /jobs/{job_id}/materials.",
+      inputSchema: {
+        jobId: z.string().min(1),
+      },
+    },
+    async ({ jobId }) => runJsonRequest(() => client.get("/jobs/{jobId}/materials", {
+      pathParams: { jobId },
+    })),
   );
 
   server.registerTool(

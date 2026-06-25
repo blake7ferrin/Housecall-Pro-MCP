@@ -6,11 +6,20 @@ export type QueryParams = Record<string, QueryValue>;
 
 export type HousecallProAuthScheme = "auto" | "bearer" | "token" | "x-api-key" | "authorization";
 
+export interface HousecallProOAuthConfig {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  redirectUri: string;
+}
+
 export interface HousecallProConfig {
   apiKey?: string;
   bearerToken?: string;
   authScheme: HousecallProAuthScheme;
   companyId?: string;
+  oauth?: HousecallProOAuthConfig;
+  rateLimitMaxRetries: number;
   baseUrl: string;
   customersPath: string;
   customerPath: string;
