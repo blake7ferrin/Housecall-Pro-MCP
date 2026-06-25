@@ -4,51 +4,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import {
-  HousecallProApiError,
   HousecallProClient,
   loadHousecallProConfig,
 } from "./housecallProClient.js";
-
-function toJson(value: unknown): string {
-  return JSON.stringify(value, null, 2);
-}
-
-function formatError(error: unknown): string {
-  if (error instanceof HousecallProApiError) {
-    return [
-      error.message,
-      "",
-      "Details:",
-      toJson(error.details),
-    ].join("\n");
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "An unknown error occurred.";
-}
-
-function textResponse(text: string, isError = false) {
-  return {
-    ...(isError ? { isError: true } : {}),
-    content: [
-      {
-        type: "text" as const,
-        text,
-      },
-    ],
-  };
-}
-
-async function runJsonRequest(fn: () => Promise<unknown>) {
-  try {
-    return textResponse(toJson(await fn()));
-  } catch (error) {
-    return textResponse(formatError(error), true);
-  }
-}
+import { registerMcpPrompts } from "./mcpPrompts.js";
+import { registerMcpResources } from "./mcpResources.js";
+import { runJsonRequest, textResponse } from "./mcpHelpers.js";
+import { registerWorkflowTools } from "./workflows.js";
 
 const looseObject = z.record(z.string(), z.unknown());
 const stringArray = z.array(z.string());
@@ -134,7 +96,7 @@ export function buildMcpServer(): McpServer {
 
   const server = new McpServer({
     name: "housecall-pro-mcp",
-    version: "0.3.0",
+    version: "0.4.0",
   });
 
   server.registerTool(
@@ -1577,6 +1539,10 @@ export function buildMcpServer(): McpServer {
       },
     })),
   );
+
+  registerWorkflowTools(server, client);
+  registerMcpResources(server, client);
+  registerMcpPrompts(server);
 
   return server;
 }

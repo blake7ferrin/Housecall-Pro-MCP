@@ -6,6 +6,9 @@ This is a standalone Model Context Protocol server for Housecall Pro.
 
 - Customers: list, get, create, update, list addresses, get address, create address
 - Jobs: list, get, create, update/clear schedule, dispatch, create appointment, lock (single or bulk), add/delete notes, add/remove tags, create links, list materials
+- Workflows: find-or-create customer, book job, schedule-and-dispatch, convert lead to job, fetch all pages
+- MCP resources: company, employees, job types, lead sources, tags, pipeline statuses, API conventions, webhook events
+- MCP prompts: morning dispatch briefing, estimate follow-up, invoice aging, book service call
 - Estimates: list, get, create
 - Invoices: list, get by UUID, list for a job
 - Leads: list, get, create, convert, list lead line items
@@ -134,6 +137,8 @@ npm run smoke
 - In `auto` mode, the client uses `Authorization: Token ...` for API keys and `Authorization: Bearer ...` for OAuth tokens, matching Housecall Pro's published auth guidance.
 - When OAuth refresh credentials are configured, the client automatically refreshes expired bearer tokens on 401 and retries the request once.
 - The client retries rate-limited requests (HTTP 429) with exponential backoff.
+- MCP resources expose reference data at `housecall://reference/*` URIs for company metadata, catalogs, and static API conventions.
+- MCP prompts provide ready-made workflows for dispatch briefings, estimate follow-up, invoice aging, and booking service calls.
 - Your current credential can read most company-level resources, but `GET /application` and write routes like `POST /customers`, `POST /jobs`, and `POST /estimates` returned `401 Unauthorized ... does not have the necessary permissions`.
 - Webhook subscription tools use `POST /webhook_subscriptions` and `DELETE /webhook_subscriptions/{subscription_id}`.
 - `POST /jobs/lock` requires a `statuses` array (`scheduled`, `in_progress`, or `completed`) as of June 2026.
