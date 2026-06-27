@@ -8,6 +8,7 @@ This is a standalone Model Context Protocol server for Housecall Pro.
 - Jobs: list, get, create, update/clear schedule, dispatch, create appointment, lock (single or bulk), add/delete notes, add/remove tags, create links, list materials
 - Workflows: find-or-create customer, book job, schedule-and-dispatch, convert lead to job, fetch all pages
 - MCP resources: company, employees, job types, lead sources, tags, pipeline statuses, price book services, API conventions, webhook events
+- Webhooks: HTTP ingress at POST /webhooks/housecall with HMAC verification; list/get/clear stored events via MCP tools
 - MCP prompts: morning dispatch briefing, estimate follow-up, invoice aging, book service call
 - Estimates: list, get, create, approve/decline options, manage options (create, line items, schedule, notes, links)
 - Invoices: list, get by UUID, list for a job
@@ -76,6 +77,7 @@ Optional (recommended):
 - `HOUSECALL_PRO_COMPANY_ID` (scopes API requests to a specific sub-location)
 - `HOUSECALL_PRO_OAUTH_CLIENT_ID`, `HOUSECALL_PRO_OAUTH_CLIENT_SECRET`, `HOUSECALL_PRO_OAUTH_REFRESH_TOKEN`, `HOUSECALL_PRO_OAUTH_REDIRECT_URI` (automatic OAuth token refresh)
 - `HOUSECALL_PRO_RATE_LIMIT_MAX_RETRIES` (retries on HTTP 429, default `3`)
+- `HOUSECALL_PRO_WEBHOOK_SIGNING_SECRET` (verifies incoming webhooks at POST /webhooks/housecall)
 
 ### Railway CLI
 
@@ -97,6 +99,7 @@ railway open
 ### Endpoints
 
 - `GET /healthz` returns 200 OK.
+- `POST /webhooks/housecall` receives signed Housecall Pro webhook payloads.
 - `POST /mcp`, `GET /mcp`, `DELETE /mcp` implement MCP Streamable HTTP.
   - If `MCP_HTTP_BEARER_TOKEN` is set, send `Authorization: Bearer <token>`.
 
@@ -111,6 +114,23 @@ To validate auth and the default routes against a real account:
 ```bash
 npm run smoke
 ```
+
+## Webhook ingress
+
+When running `npm start`, register your public URL with Housecall Pro:
+
+```
+https://your-app.up.railway.app/webhooks/housecall
+```
+
+Set `HOUSECALL_PRO_WEBHOOK_SIGNING_SECRET` from your Housecall Pro account. The server verifies each delivery using the `Api-Timestamp` and `Api-Signature` headers (HMAC-SHA256 over `timestamp + "." + raw_json_body`).
+
+Use `housecall_create_webhook_subscription` to register event types, then inspect deliveries with:
+
+- `housecall_list_webhook_events`
+- `housecall_get_webhook_event`
+
+For local testing only, set `HOUSECALL_PRO_WEBHOOK_SKIP_VERIFY=true` to bypass signature checks.
 
 ## MCP client example
 
