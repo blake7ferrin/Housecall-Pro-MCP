@@ -2,13 +2,14 @@ import "dotenv/config";
 
 import { randomUUID } from "node:crypto";
 
+import express from "express";
 import type { Request, Response, NextFunction } from "express";
-import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { InMemoryEventStore } from "@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js";
 
 import { buildMcpServer } from "./mcpServer.js";
+import { createHousecallWebhookHandler } from "./webhookHttp.js";
 
 function getPort(): number {
   const raw = process.env.PORT ?? process.env.MCP_PORT ?? "3000";
@@ -34,15 +35,21 @@ function requireRailwayBearer(req: Request, res: Response, next: NextFunction) {
   res.status(401).json({ error: "Unauthorized" });
 }
 
-// Bind intent must be 0.0.0.0 for public deploys (e.g. Railway). Default "127.0.0.1"
-// enables localhost-only Host validation and rejects real hostnames like *.up.railway.app.
-const app = createMcpExpressApp({ host: "0.0.0.0" });
+const app = express();
+
+// Webhook ingress must read the raw JSON body for HMAC verification.
+app.post(
+  "/webhooks/housecall",
+  express.raw({ type: "application/json", limit: "1mb" }),
+  createHousecallWebhookHandler(),
+);
+
+app.use(express.json());
 
 app.get("/healthz", (_req: Request, res: Response) => {
   res.status(200).json({ ok: true });
 });
 
-// Map to store transports by session ID for stateful Streamable HTTP.
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 
 const mcpHandler = async (req: Request, res: Response) => {
@@ -117,11 +124,11 @@ app.delete("/mcp", requireRailwayBearer, async (req: Request, res: Response) => 
 });
 
 const port = getPort();
-app.listen(port, (error?: unknown) => {
+app.listen(port, "0.0.0.0", (error?: unknown) => {
   if (error) {
     process.stderr.write(`Failed to start HTTP server: ${String(error)}\n`);
     process.exit(1);
   }
   process.stdout.write(`MCP HTTP server listening on :${port}\n`);
+  process.stdout.write(`Webhook ingress: POST /webhooks/housecall\n`);
 });
-

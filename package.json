@@ -1,6 +1,6 @@
 {
   "name": "housecall-pro-mcp",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "Model Context Protocol server for Housecall Pro",
@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "smoke": "tsx src/smoke.ts",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "start": "node dist/http.js",
     "start:stdio": "node dist/index.js"
   },
